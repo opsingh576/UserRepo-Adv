@@ -154,3 +154,23 @@ public class UserServiceTest {
     }
 } 
 
++---------------------+        +-------------------------+         +---------------------+
+|     Client (UI)     |<----->|  API Gateway / Router   |<------->| Authentication Svc  |
++---------------------+        +-------------------------+         +---------------------+
+                                             |                             
+                  -----------------------------------------------------------------------
+                 |             |                  |                  |                 |
+        +----------------+ +----------------+ +----------------+ +----------------+ +----------------+
+        | User Service   | | Advisor Service| | Booking Service| | Search Service | | Notification Svc|
+        +----------------+ +----------------+ +----------------+ +----------------+ +----------------+
+                 |                    |                  |                |                |
+                 |                    |                  |                |                |
+         +----------------+  +----------------+  +----------------+  +----------------+  +----------------+
+         |  Email Service |  |  Schedule Svc   |  |  Payment Svc   |  | Billing Svc    |  |  Audit Logger  |
+         +----------------+  +----------------+  +----------------+  +----------------+  +----------------+
+
+                       ⇩ All Services Communicate via: REST API + JSON + Message Queue (Optional for async ops)
+                       ⇩ Data Persistence via respective DBs (MySQL/PostgreSQL)
+
+
+
