@@ -1,0 +1,159 @@
+package com.wsadvising.searchservice;
+
+// --- Advisor Search DTO ---
+import java.util.List;
+
+public class AdvisorSearchDTO {
+    private boolean virtual;
+    private boolean physical;
+    private String pincode;
+    private int minExperience;
+    private int maxExperience;
+    // Getters and Setters
+}
+
+// --- Advisor Model (used for search responses) ---
+public class AdvisorModel {
+    private Long id;
+    private String name;
+    private String qualification;
+    private int experience;
+    private String address;
+    private String pincode;
+    private String profilePhotoUrl;
+    private boolean availableVirtually;
+    private boolean availablePhysically;
+    // Getters and Setters
+}
+
+// --- Advisor Repository (for search) ---
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface AdvisorRepository extends JpaRepository<Advisor, Long> {
+    List<Advisor> findByPincode(String pincode);
+    List<Advisor> findByExperienceBetween(int minExp, int maxExp);
+    List<Advisor> findByAvailableVirtuallyTrue();
+    List<Advisor> findByAvailablePhysicallyTrue();
+    List<Advisor> findByAvailableVirtuallyTrueAndAvailablePhysicallyTrue();
+}
+
+// --- Advisor Entity Copy (to avoid circular dependency in search service) ---
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "advisors")
+public class Advisor {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String qualification;
+    private int experience;
+    private String address;
+    private String pincode;
+    private String profilePhotoUrl;
+    private boolean availableVirtually;
+    private boolean availablePhysically;
+    // Getters and Setters
+}
+
+// --- Search Service ---
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class SearchService {
+
+    @Autowired
+    private AdvisorRepository advisorRepository;
+
+    public List<AdvisorModel> searchAdvisors(AdvisorSearchDTO criteria) {
+        List<Advisor> advisors = advisorRepository.findAll();
+        return advisors.stream()
+                .filter(a -> (criteria.isVirtual() && a.isAvailableVirtually()) ||
+                             (criteria.isPhysical() && a.isAvailablePhysically()))
+                .filter(a -> criteria.getPincode() == null || a.getPincode().equals(criteria.getPincode()))
+                .filter(a -> a.getExperience() >= criteria.getMinExperience() && a.getExperience() <= criteria.getMaxExperience())
+                .map(this::toModel)
+                .collect(Collectors.toList());
+    }
+
+    private AdvisorModel toModel(Advisor advisor) {
+        AdvisorModel model = new AdvisorModel();
+        model.setId(advisor.getId());
+        model.setName(advisor.getName());
+        model.setQualification(advisor.getQualification());
+        model.setExperience(advisor.getExperience());
+        model.setAddress(advisor.getAddress());
+        model.setPincode(advisor.getPincode());
+        model.setProfilePhotoUrl(advisor.getProfilePhotoUrl());
+        model.setAvailableVirtually(advisor.isAvailableVirtually());
+        model.setAvailablePhysically(advisor.isAvailablePhysically());
+        return model;
+    }
+}
+
+// --- Search Controller ---
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/search")
+public class SearchController {
+
+    @Autowired
+    private SearchService searchService;
+
+    @PostMapping("/advisors")
+    public List<AdvisorModel> search(@RequestBody AdvisorSearchDTO criteria) {
+        return searchService.searchAdvisors(criteria);
+    }
+}
+
+// --- Unit Test for SearchService ---
+import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import java.util.*;
+
+public class SearchServiceTest {
+
+    @Mock
+    private AdvisorRepository advisorRepository;
+
+    @InjectMocks
+    private SearchService searchService;
+
+    public SearchServiceTest() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testSearchAdvisors_ByVirtualAndExperience() {
+        Advisor advisor = new Advisor();
+        advisor.setId(1L);
+        advisor.setName("Jane Doe");
+        advisor.setExperience(8);
+        advisor.setAvailableVirtually(true);
+        advisor.setAvailablePhysically(false);
+
+        when(advisorRepository.findAll()).thenReturn(Collections.singletonList(advisor));
+
+        AdvisorSearchDTO criteria = new AdvisorSearchDTO();
+        criteria.setVirtual(true);
+        criteria.setPhysical(false);
+        criteria.setMinExperience(5);
+        criteria.setMaxExperience(10);
+
+        List<AdvisorModel> result = searchService.searchAdvisors(criteria);
+        assertEquals(1, result.size());
+        assertEquals("Jane Doe", result.get(0).getName());
+    }
+} 
