@@ -1,0 +1,88 @@
+package com.wsadvising.notificationservice;
+
+// --- Email Details DTO ---
+public class EmailDetails {
+    private String recipient;
+    private String subject;
+    private String body;
+    // Getters and Setters
+}
+
+// --- Email Service ---
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.stereotype.Service;
+
+@Service
+public class EmailService {
+
+    @Autowired
+    private JavaMailSender mailSender;
+
+    public String sendEmail(EmailDetails details) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(details.getRecipient());
+            message.setSubject(details.getSubject());
+            message.setText(details.getBody());
+            mailSender.send(message);
+            return "Email sent successfully";
+        } catch (Exception e) {
+            return "Error while sending email: " + e.getMessage();
+        }
+    }
+}
+
+// --- Email Controller ---
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/notifications")
+public class NotificationController {
+
+    @Autowired
+    private EmailService emailService;
+
+    @PostMapping("/send")
+    public String sendEmail(@RequestBody EmailDetails details) {
+        return emailService.sendEmail(details);
+    }
+}
+
+// --- Unit Test for EmailService ---
+import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+
+public class EmailServiceTest {
+
+    @Mock
+    private JavaMailSender mailSender;
+
+    @InjectMocks
+    private EmailService emailService;
+
+    public EmailServiceTest() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testSendEmail_Success() {
+        EmailDetails details = new EmailDetails();
+        details.setRecipient("test@example.com");
+        details.setSubject("Test Subject");
+        details.setBody("Test Body");
+
+        doNothing().when(mailSender).send(any(SimpleMailMessage.class));
+
+        String response = emailService.sendEmail(details);
+        assertEquals("Email sent successfully", response);
+    }
+} 
