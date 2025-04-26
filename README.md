@@ -172,5 +172,8 @@ public class UserServiceTest {
                        ⇩ All Services Communicate via: REST API + JSON + Message Queue (Optional for async ops)
                        ⇩ Data Persistence via respective DBs (MySQL/PostgreSQL)
 
+https://teams.microsoft.com/l/meetup-join/19%3ameeting_YjRkOTEzZjMtZjRjNC00NTczLTk4ZWItNTNmOWIzMmU5OTBm%40thread.v2/0?context=%7b%22Tid%22%3a%2276a2ae5a-9f00-4f6b-95ed-5d33d77c4d61%22%2c%22Oid%22%3a%229c292050-5396-4bb2-bba2-8fd73ec6e499%22%7d
+
+
 
 
