@@ -1,0 +1,225 @@
+Booking service complte code
+
+
+
+package com.example.bookingservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class BookingServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BookingServiceApplication.class, args);
+    }
+}
+
+
+@Entity
+@Table(name = "bookings")
+public class Booking {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long sessionId;
+
+    private Long clientId;
+    private Long advisorId;
+    private Long userId;
+    private LocalDate bookingDate;
+    private String meetingLink;
+    private Long paymentId;
+    private Long slotId;
+}
+
+
+
+public class BookingDTO {
+    private Long sessionId;
+    private Long clientId;
+    private Long advisorId;
+    private Long userId;
+    private LocalDate bookingDate;
+    private String meetingLink;
+    private Long paymentId;
+    private Long slotId;
+}
+
+
+@Repository
+public interface BookingRepository extends JpaRepository<Booking, Long> {
+    List<Booking> findByUserId(Long userId);
+}
+
+
+
+public interface BookingService {
+    BookingDTO createBooking(BookingDTO dto);
+    BookingDTO getBookingById(Long sessionId);
+    List<BookingDTO> getAllBookings();
+    List<BookingDTO> getBookingsByUserId(Long userId);
+    BookingDTO updateBooking(Long sessionId, BookingDTO dto);
+    void deleteBooking(Long sessionId);
+}
+
+
+@Service
+public class BookingServiceImpl implements BookingService {
+
+    @Autowired
+    private BookingRepository repository;
+
+    @Override
+    public BookingDTO createBooking(BookingDTO dto) {
+        Booking booking = new Booking();
+        BeanUtils.copyProperties(dto, booking);
+        booking = repository.save(booking);
+        BeanUtils.copyProperties(booking, dto);
+        return dto;
+    }
+
+    @Override
+    public BookingDTO getBookingById(Long sessionId) {
+        Booking booking = repository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + sessionId));
+        BookingDTO dto = new BookingDTO();
+        BeanUtils.copyProperties(booking, dto);
+        return dto;
+    }
+
+    @Override
+    public List<BookingDTO> getAllBookings() {
+        return repository.findAll().stream().map(booking -> {
+            BookingDTO dto = new BookingDTO();
+            BeanUtils.copyProperties(booking, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<BookingDTO> getBookingsByUserId(Long userId) {
+        return repository.findByUserId(userId).stream().map(booking -> {
+            BookingDTO dto = new BookingDTO();
+            BeanUtils.copyProperties(booking, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public BookingDTO updateBooking(Long sessionId, BookingDTO dto) {
+        Booking booking = repository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + sessionId));
+        BeanUtils.copyProperties(dto, booking, "sessionId");
+        booking = repository.save(booking);
+        BeanUtils.copyProperties(booking, dto);
+        return dto;
+    }
+
+    @Override
+    public void deleteBooking(Long sessionId) {
+        Booking booking = repository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + sessionId));
+        repository.delete(booking);
+    }
+}
+
+
+@RestController
+@RequestMapping("/api/bookings")
+public class BookingController {
+
+    @Autowired
+    private BookingService service;
+
+    @PostMapping
+    public ResponseEntity<BookingDTO> createBooking(@RequestBody BookingDTO dto) {
+        return new ResponseEntity<>(service.createBooking(dto), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<BookingDTO> getBookingById(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getBookingById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<BookingDTO>> getAllBookings() {
+        return ResponseEntity.ok(service.getAllBookings());
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<BookingDTO>> getBookingsByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(service.getBookingsByUserId(userId));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<BookingDTO> updateBooking(@PathVariable Long id, @RequestBody BookingDTO dto) {
+        return ResponseEntity.ok(service.updateBooking(id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteBooking(@PathVariable Long id) {
+        service.deleteBooking(id);
+        return ResponseEntity.ok("Booking deleted successfully");
+    }
+}
+
+
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<String> handleNotFound(ResourceNotFoundException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<String> handleGeneric(Exception ex) {
+        return new ResponseEntity<>("Internal server error: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
+
+server:
+  port: 8084
+
+spring:
+  application:
+    name: booking-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/bookingdb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

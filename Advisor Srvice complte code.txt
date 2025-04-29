@@ -1,0 +1,199 @@
+Advisor Srvice complte code
+
+
+package com.example.advisorservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class AdvisorServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AdvisorServiceApplication.class, args);
+    }
+}
+
+
+@Entity
+@Table(name = "advisors")
+public class Advisor {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long advisorId;
+
+    private int experience;
+
+    @Enumerated(EnumType.STRING)
+    private Mode availableMode; // VIRTUAL or IN_PERSON
+
+    private String availabilityDetails;
+
+    private String advisorPincode;
+
+    public enum Mode {
+        VIRTUAL, IN_PERSON
+    }
+}
+
+
+public class AdvisorDTO {
+    private Long advisorId;
+    private int experience;
+    private String availableMode;  // "VIRTUAL" or "IN_PERSON"
+    private String availabilityDetails;
+    private String advisorPincode;
+}
+
+@Repository
+public interface AdvisorRepository extends JpaRepository<Advisor, Long> {
+}
+
+
+public interface AdvisorService {
+    AdvisorDTO createAdvisor(AdvisorDTO advisorDTO);
+    AdvisorDTO getAdvisorById(Long advisorId);
+    List<AdvisorDTO> getAllAdvisors();
+    AdvisorDTO updateAdvisor(Long advisorId, AdvisorDTO advisorDTO);
+    void deleteAdvisor(Long advisorId);
+}
+
+
+
+
+@Service
+public class AdvisorServiceImpl implements AdvisorService {
+
+    @Autowired
+    private AdvisorRepository advisorRepository;
+
+    @Override
+    public AdvisorDTO createAdvisor(AdvisorDTO dto) {
+        Advisor advisor = new Advisor();
+        advisor.setExperience(dto.getExperience());
+        advisor.setAvailableMode(Advisor.Mode.valueOf(dto.getAvailableMode()));
+        advisor.setAvailabilityDetails(dto.getAvailabilityDetails());
+        advisor.setAdvisorPincode(dto.getAdvisorPincode());
+        advisor = advisorRepository.save(advisor);
+        return mapToDTO(advisor);
+    }
+
+    @Override
+    public AdvisorDTO getAdvisorById(Long advisorId) {
+        Advisor advisor = advisorRepository.findById(advisorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Advisor not found with ID: " + advisorId));
+        return mapToDTO(advisor);
+    }
+
+    @Override
+    public List<AdvisorDTO> getAllAdvisors() {
+        return advisorRepository.findAll().stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public AdvisorDTO updateAdvisor(Long advisorId, AdvisorDTO dto) {
+        Advisor advisor = advisorRepository.findById(advisorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Advisor not found with ID: " + advisorId));
+
+        advisor.setExperience(dto.getExperience());
+        advisor.setAvailableMode(Advisor.Mode.valueOf(dto.getAvailableMode()));
+        advisor.setAvailabilityDetails(dto.getAvailabilityDetails());
+        advisor.setAdvisorPincode(dto.getAdvisorPincode());
+
+        advisor = advisorRepository.save(advisor);
+        return mapToDTO(advisor);
+    }
+
+    @Override
+    public void deleteAdvisor(Long advisorId) {
+        Advisor advisor = advisorRepository.findById(advisorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Advisor not found with ID: " + advisorId));
+        advisorRepository.delete(advisor);
+    }
+
+    private AdvisorDTO mapToDTO(Advisor advisor) {
+        AdvisorDTO dto = new AdvisorDTO();
+        dto.setAdvisorId(advisor.getAdvisorId());
+        dto.setExperience(advisor.getExperience());
+        dto.setAvailableMode(advisor.getAvailableMode().name());
+        dto.setAvailabilityDetails(advisor.getAvailabilityDetails());
+        dto.setAdvisorPincode(advisor.getAdvisorPincode());
+        return dto;
+    }
+}
+
+
+
+@RestController
+@RequestMapping("/api/advisors")
+public class AdvisorController {
+
+    @Autowired
+    private AdvisorService advisorService;
+
+    @PostMapping
+    public ResponseEntity<AdvisorDTO> createAdvisor(@RequestBody AdvisorDTO dto) {
+        return new ResponseEntity<>(advisorService.createAdvisor(dto), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AdvisorDTO> getAdvisorById(@PathVariable Long id) {
+        return ResponseEntity.ok(advisorService.getAdvisorById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<AdvisorDTO>> getAllAdvisors() {
+        return ResponseEntity.ok(advisorService.getAllAdvisors());
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<AdvisorDTO> updateAdvisor(@PathVariable Long id, @RequestBody AdvisorDTO dto) {
+        return ResponseEntity.ok(advisorService.updateAdvisor(id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteAdvisor(@PathVariable Long id) {
+        advisorService.deleteAdvisor(id);
+        return ResponseEntity.ok("Advisor deleted successfully");
+    }
+}
+
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+
+server:
+  port: 8082
+
+spring:
+  application:
+    name: advisor-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/advisordb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
+
+
+

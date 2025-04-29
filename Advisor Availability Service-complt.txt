@@ -1,0 +1,192 @@
+Advisor Availability Service-complte code
+
+
+package com.example.advisoravailabilityservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class AdvisorAvailabilityServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AdvisorAvailabilityServiceApplication.class, args);
+    }
+}
+
+
+
+@Entity
+@Table(name = "availability_slots")
+public class AvailabilitySlot {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long slotId;
+
+    private Long advisorId;
+    private LocalDate dateAvailable;
+    private LocalTime startTime;
+    private LocalTime endTime;
+}
+
+
+public class AvailabilitySlotDTO {
+    private Long slotId;
+    private Long advisorId;
+    private LocalDate dateAvailable;
+    private LocalTime startTime;
+    private LocalTime endTime;
+}
+
+
+
+@Repository
+public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySlot, Long> {
+    List<AvailabilitySlot> findByAdvisorId(Long advisorId);
+}
+
+
+public interface AvailabilitySlotService {
+    AvailabilitySlotDTO createSlot(AvailabilitySlotDTO dto);
+    AvailabilitySlotDTO getSlotById(Long slotId);
+    List<AvailabilitySlotDTO> getAllSlots();
+    List<AvailabilitySlotDTO> getSlotsByAdvisorId(Long advisorId);
+    AvailabilitySlotDTO updateSlot(Long slotId, AvailabilitySlotDTO dto);
+    void deleteSlot(Long slotId);
+}
+
+
+@Service
+public class AvailabilitySlotServiceImpl implements AvailabilitySlotService {
+
+    @Autowired
+    private AvailabilitySlotRepository repository;
+
+    @Override
+    public AvailabilitySlotDTO createSlot(AvailabilitySlotDTO dto) {
+        AvailabilitySlot slot = new AvailabilitySlot();
+        BeanUtils.copyProperties(dto, slot);
+        slot = repository.save(slot);
+        BeanUtils.copyProperties(slot, dto);
+        return dto;
+    }
+
+    @Override
+    public AvailabilitySlotDTO getSlotById(Long slotId) {
+        AvailabilitySlot slot = repository.findById(slotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+        AvailabilitySlotDTO dto = new AvailabilitySlotDTO();
+        BeanUtils.copyProperties(slot, dto);
+        return dto;
+    }
+
+    @Override
+    public List<AvailabilitySlotDTO> getAllSlots() {
+        return repository.findAll().stream().map(slot -> {
+            AvailabilitySlotDTO dto = new AvailabilitySlotDTO();
+            BeanUtils.copyProperties(slot, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AvailabilitySlotDTO> getSlotsByAdvisorId(Long advisorId) {
+        return repository.findByAdvisorId(advisorId).stream().map(slot -> {
+            AvailabilitySlotDTO dto = new AvailabilitySlotDTO();
+            BeanUtils.copyProperties(slot, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public AvailabilitySlotDTO updateSlot(Long slotId, AvailabilitySlotDTO dto) {
+        AvailabilitySlot slot = repository.findById(slotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+        BeanUtils.copyProperties(dto, slot, "slotId");
+        slot = repository.save(slot);
+        BeanUtils.copyProperties(slot, dto);
+        return dto;
+    }
+
+    @Override
+    public void deleteSlot(Long slotId) {
+        AvailabilitySlot slot = repository.findById(slotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+        repository.delete(slot);
+    }
+}
+
+
+
+@RestController
+@RequestMapping("/api/availability")
+public class AvailabilitySlotController {
+
+    @Autowired
+    private AvailabilitySlotService service;
+
+    @PostMapping
+    public ResponseEntity<AvailabilitySlotDTO> createSlot(@RequestBody AvailabilitySlotDTO dto) {
+        return new ResponseEntity<>(service.createSlot(dto), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AvailabilitySlotDTO> getSlotById(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getSlotById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<AvailabilitySlotDTO>> getAllSlots() {
+        return ResponseEntity.ok(service.getAllSlots());
+    }
+
+    @GetMapping("/advisor/{advisorId}")
+    public ResponseEntity<List<AvailabilitySlotDTO>> getSlotsByAdvisorId(@PathVariable Long advisorId) {
+        return ResponseEntity.ok(service.getSlotsByAdvisorId(advisorId));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<AvailabilitySlotDTO> updateSlot(@PathVariable Long id, @RequestBody AvailabilitySlotDTO dto) {
+        return ResponseEntity.ok(service.updateSlot(id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteSlot(@PathVariable Long id) {
+        service.deleteSlot(id);
+        return ResponseEntity.ok("Slot deleted successfully");
+    }
+}
+
+
+
+server:
+  port: 8083
+
+spring:
+  application:
+    name: advisor-availability-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/availabilitydb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
+
+
+
+
+

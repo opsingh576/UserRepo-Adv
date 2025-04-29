@@ -1,0 +1,218 @@
+Payemnet service complet code
+
+
+package com.example.paymentservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class PaymentServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentServiceApplication.class, args);
+    }
+}
+
+
+
+@Entity
+@Table(name = "payments")
+public class Payment {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long paymentId;
+
+    private Long bookingId;
+    private Long sessionId;
+    private Long clientId;
+    private Double amount;
+    private LocalDate paymentDate;
+    private String paymentStatus;
+    private String notification;
+}
+
+
+public class PaymentDTO {
+    private Long paymentId;
+    private Long bookingId;
+    private Long sessionId;
+    private Long clientId;
+    private Double amount;
+    private LocalDate paymentDate;
+    private String paymentStatus;
+    private String notification;
+}
+
+
+@Repository
+public interface PaymentRepository extends JpaRepository<Payment, Long> {
+    List<Payment> findByClientId(Long clientId);
+}
+
+
+public interface PaymentService {
+    PaymentDTO createPayment(PaymentDTO dto);
+    PaymentDTO getPaymentById(Long paymentId);
+    List<PaymentDTO> getAllPayments();
+    List<PaymentDTO> getPaymentsByClientId(Long clientId);
+    PaymentDTO updatePayment(Long paymentId, PaymentDTO dto);
+    void deletePayment(Long paymentId);
+}
+
+
+@Service
+public class PaymentServiceImpl implements PaymentService {
+
+    @Autowired
+    private PaymentRepository repository;
+
+    @Override
+    public PaymentDTO createPayment(PaymentDTO dto) {
+        Payment payment = new Payment();
+        BeanUtils.copyProperties(dto, payment);
+        payment.setPaymentDate(LocalDate.now());
+        payment = repository.save(payment);
+        BeanUtils.copyProperties(payment, dto);
+        return dto;
+    }
+
+    @Override
+    public PaymentDTO getPaymentById(Long paymentId) {
+        Payment payment = repository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with ID: " + paymentId));
+        PaymentDTO dto = new PaymentDTO();
+        BeanUtils.copyProperties(payment, dto);
+        return dto;
+    }
+
+    @Override
+    public List<PaymentDTO> getAllPayments() {
+        return repository.findAll().stream().map(payment -> {
+            PaymentDTO dto = new PaymentDTO();
+            BeanUtils.copyProperties(payment, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PaymentDTO> getPaymentsByClientId(Long clientId) {
+        return repository.findByClientId(clientId).stream().map(payment -> {
+            PaymentDTO dto = new PaymentDTO();
+            BeanUtils.copyProperties(payment, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public PaymentDTO updatePayment(Long paymentId, PaymentDTO dto) {
+        Payment payment = repository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with ID: " + paymentId));
+        BeanUtils.copyProperties(dto, payment, "paymentId", "paymentDate");
+        payment = repository.save(payment);
+        BeanUtils.copyProperties(payment, dto);
+        return dto;
+    }
+
+    @Override
+    public void deletePayment(Long paymentId) {
+        Payment payment = repository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with ID: " + paymentId));
+        repository.delete(payment);
+    }
+}
+
+
+@RestController
+@RequestMapping("/api/payments")
+public class PaymentController {
+
+    @Autowired
+    private PaymentService service;
+
+    @PostMapping
+    public ResponseEntity<PaymentDTO> createPayment(@RequestBody PaymentDTO dto) {
+        return new ResponseEntity<>(service.createPayment(dto), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PaymentDTO> getPaymentById(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getPaymentById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<PaymentDTO>> getAllPayments() {
+        return ResponseEntity.ok(service.getAllPayments());
+    }
+
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<List<PaymentDTO>> getPaymentsByClientId(@PathVariable Long clientId) {
+        return ResponseEntity.ok(service.getPaymentsByClientId(clientId));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PaymentDTO> updatePayment(@PathVariable Long id, @RequestBody PaymentDTO dto) {
+        return ResponseEntity.ok(service.updatePayment(id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deletePayment(@PathVariable Long id) {
+        service.deletePayment(id);
+        return ResponseEntity.ok("Payment deleted successfully");
+    }
+}
+
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<String> handleNotFound(ResourceNotFoundException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<String> handleGeneric(Exception ex) {
+        return new ResponseEntity<>("Internal server error: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
+
+server:
+  port: 8085
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/paymentdb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,200 @@
+USER SERVICE- Complete code
+
+
+
+package com.example.userservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+
+
+//Entity
+
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long userId;
+
+    private String userName;
+    private String email;
+    private String contactNo;
+    private String role;
+    private String pincode;
+    private LocalDate date;
+}
+
+
+
+//DTO
+
+public class UserDTO {
+    private Long userId;
+    private String userName;
+    private String email;
+    private String contactNo;
+    private String role;
+    private String pincode;
+    private LocalDate date;
+}
+
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+}
+
+
+
+public interface UserService {
+    UserDTO createUser(UserDTO userDTO);
+    UserDTO getUserById(Long userId);
+    List<UserDTO> getAllUsers();
+    UserDTO updateUser(Long userId, UserDTO userDTO);
+    void deleteUser(Long userId);
+}
+
+
+
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    public UserDTO createUser(UserDTO userDTO) {
+        User user = new User();
+        BeanUtils.copyProperties(userDTO, user);
+        user = userRepository.save(user);
+        BeanUtils.copyProperties(user, userDTO);
+        return userDTO;
+    }
+
+    @Override
+    public UserDTO getUserById(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(\"User not found with ID: \" + userId));
+        UserDTO dto = new UserDTO();
+        BeanUtils.copyProperties(user, dto);
+        return dto;
+    }
+
+    @Override
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream().map(user -> {
+            UserDTO dto = new UserDTO();
+            BeanUtils.copyProperties(user, dto);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public UserDTO updateUser(Long userId, UserDTO userDTO) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(\"User not found with ID: \" + userId));
+        BeanUtils.copyProperties(userDTO, user, \"userId\");
+        user = userRepository.save(user);
+        BeanUtils.copyProperties(user, userDTO);
+        return userDTO;
+    }
+
+    @Override
+    public void deleteUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(\"User not found with ID: \" + userId));
+        userRepository.delete(user);
+    }
+}
+
+
+
+@RestController
+@RequestMapping(\"/api/users\")
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping
+    public ResponseEntity<UserDTO> createUser(@RequestBody UserDTO userDTO) {
+        return new ResponseEntity<>(userService.createUser(userDTO), HttpStatus.CREATED);
+    }
+
+    @GetMapping(\"/{id}\")
+    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<UserDTO>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    @PutMapping(\"/{id}\")
+    public ResponseEntity<UserDTO> updateUser(@PathVariable Long id, @RequestBody UserDTO userDTO) {
+        return ResponseEntity.ok(userService.updateUser(id, userDTO));
+    }
+
+    @DeleteMapping(\"/{id}\")
+    public ResponseEntity<String> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);
+        return ResponseEntity.ok(\"User deleted successfully\");
+    }
+}
+
+
+//. Global Exception Handler: GlobalExceptionHandler.java
+
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+
+@FeignClient(name = "advisor-service", url = "http://localhost:8082")
+public interface AdvisorClient {
+
+    @GetMapping("/api/advisors/{id}")
+    AdvisorDTO getAdvisorById(@PathVariable("id") Long advisorId);
+}
+
+
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/userdb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
+

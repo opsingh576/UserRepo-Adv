@@ -1,0 +1,117 @@
+Notifaction service complte code
+
+
+package com.example.notificationservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableFeignClients
+public class NotificationServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(NotificationServiceApplication.class, args);
+    }
+}
+
+
+
+@Entity
+@Table(name = "notifications")
+public class Notification {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long notificationId;
+
+    private String email;
+    private String subject;
+    private String message;
+    private LocalDateTime timestamp;
+}
+
+
+public class NotificationDTO {
+    private Long notificationId;
+    private String email;
+    private String subject;
+    private String message;
+    private LocalDateTime timestamp;
+}
+
+
+
+@Repository
+public interface NotificationRepository extends JpaRepository<Notification, Long> {
+}
+
+
+public interface NotificationService {
+    NotificationDTO sendNotification(NotificationDTO dto);
+}
+
+@Service
+public class NotificationServiceImpl implements NotificationService {
+
+    @Autowired
+    private NotificationRepository repository;
+
+    @Override
+    public NotificationDTO sendNotification(NotificationDTO dto) {
+        Notification notification = new Notification();
+        BeanUtils.copyProperties(dto, notification);
+        notification.setTimestamp(LocalDateTime.now());
+
+        notification = repository.save(notification);
+        BeanUtils.copyProperties(notification, dto);
+
+        // Simulate email sending (can be replaced with JavaMailSender)
+        System.out.println(\"Sending email to \" + notification.getEmail());
+        System.out.println(\"Subject: \" + notification.getSubject());
+        System.out.println(\"Message: \" + notification.getMessage());
+
+        return dto;
+    }
+}
+
+
+@RestController
+@RequestMapping(\"/api/notifications\")
+public class NotificationController {
+
+    @Autowired
+    private NotificationService service;
+
+    @PostMapping
+    public ResponseEntity<NotificationDTO> sendNotification(@RequestBody NotificationDTO dto) {
+        return new ResponseEntity<>(service.sendNotification(dto), HttpStatus.CREATED);
+    }
+}
+
+
+
+server:
+  port: 8086
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/notificationdb
+    username: root
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+
+
+
