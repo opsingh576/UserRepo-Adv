@@ -1,0 +1,19 @@
+Create the application (using springBoot & Microservices) Advisory Management System using below Entities and modules and perform CRUD operation using spring Data JPA
+
+User table:user id,user name,email,contact no,role,pincode,date
+ 
+Advisor table:advisor id,experience,available mode(Virtual/In Person),availibity detail,advisor pincode
+ 
+Advisor availability table:slot id,advisor id,date available,date(start,end)
+ 
+Booking details:session id,client id,advisor id,user id,booking date,meeting link,payment id,slot id
+ 
+Payment:booking id,payment id,session id,client id,amount,date of payment, payment status,notification
+ 
+Notification details table: email, Notification id
+
+
+
+Login Module - User + Advisor Registeration
+Booking Advisory - Alert Notification, Display of Booked Sessions + Booking of a session
+View Advisor Appt - Search of Advisor, Search of User, Send Booking Details as Email
