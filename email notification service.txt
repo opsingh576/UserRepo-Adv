@@ -1,0 +1,285 @@
+email notification service
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+
+
+application.properties
+
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=your_email@gmail.com
+spring.mail.password=your_email_password
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+
+
+@RestController
+@RequestMapping("/api/notify")
+public class NotificationController {
+
+    @Autowired
+    private JavaMailSender mailSender;
+
+    @PostMapping("/email")
+    public ResponseEntity<String> sendEmail(@RequestBody EmailRequest request) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(request.getTo());
+        message.setSubject(request.getSubject());
+        message.setText(request.getBody());
+
+        mailSender.send(message);
+
+        return ResponseEntity.ok("Email sent successfully!");
+    }
+}
+
+
+public class EmailRequest {
+    private String to;
+    private String subject;
+    private String body;
+
+    // Getters and Setters
+}
+
+
+//client service
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+
+
+//application .properties
+
+spring.application.name=client-service
+notification.service.url=http://localhost:8081
+
+
+//feign client
+
+@FeignClient(name = "notification-service", url = "${notification.service.url}")
+public interface NotificationClient {
+
+    @PostMapping("/api/notify/email")
+    String sendEmail(@RequestBody EmailRequest emailRequest);
+}
+
+
+@RestController
+@RequestMapping("/api/client")
+public class ClientController {
+
+    @Autowired
+    private NotificationClient notificationClient;
+
+    @PostMapping("/trigger-email")
+    public ResponseEntity<String> triggerEmail(@RequestBody EmailRequest request) {
+        String response = notificationClient.sendEmail(request);
+        return ResponseEntity.ok(response);
+    }
+}
+
+
+//emailrequest.java same as Notifaction service
+
+
+
+improved Notifaction Service
+
+notification-service/
+├── controller/
+│   └── NotificationController.java
+├── service/
+│   └── EmailService.java
+├── model/
+│   └── EmailRequest.java
+├── exception/
+│   ├── EmailSendException.java
+│   └── GlobalExceptionHandler.java
+├── dto/
+│   └── ApiResponse.java
+└── NotificationServiceApplication.java
+
+
+
+1-->
+
+package com.notification.model;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class EmailRequest {
+    @Email
+    @NotBlank
+    private String to;
+
+    @NotBlank
+    private String subject;
+
+    @NotBlank
+    private String body;
+}
+
+
+2-->
+
+package com.notification.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+@AllArgsConstructor
+public class ApiResponse {
+    private boolean success;
+    private String message;
+}
+
+
+3-->
+
+package com.notification.service;
+
+import com.notification.model.EmailRequest;
+import com.notification.exception.EmailSendException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+@Service
+public class EmailService {
+
+    @Autowired
+    private JavaMailSender mailSender;
+
+    @Async
+    public void sendEmail(EmailRequest request) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(request.getTo());
+            message.setSubject(request.getSubject());
+            message.setText(request.getBody());
+
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new EmailSendException("Failed to send email to " + request.getTo(), e);
+        }
+    }
+}
+
+
+4-->
+
+package com.notification.controller;
+
+import com.notification.dto.ApiResponse;
+import com.notification.model.EmailRequest;
+import com.notification.service.EmailService;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/notify")
+public class NotificationController {
+
+    @Autowired
+    private EmailService emailService;
+
+    @PostMapping("/email")
+    public ResponseEntity<ApiResponse> sendEmail(@Valid @RequestBody EmailRequest request) {
+        emailService.sendEmail(request);
+        return ResponseEntity.ok(new ApiResponse(true, "Email sent successfully"));
+    }
+}
+
+
+5-->
+
+package com.notification.exception;
+
+public class EmailSendException extends RuntimeException {
+    public EmailSendException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+
+6-->
+
+package com.notification.exception;
+
+import com.notification.dto.ApiResponse;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(EmailSendException.class)
+    public ResponseEntity<ApiResponse> handleEmailException(EmailSendException e) {
+        return ResponseEntity
+                .badRequest()
+                .body(new ApiResponse(false, e.getMessage()));
+    }
+}
+
+
+7-->
+
+@SpringBootApplication
+@EnableAsync
+public class NotificationServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(NotificationServiceApplication.class, args);
+    }
+}
+
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: notification-service
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your_email@gmail.com         # <-- Replace with actual email
+    password: your_email_password          # <-- Use environment variables or secrets in production
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+    default-encoding: UTF-8
+
+
+
+
+
