@@ -1,3 +1,6 @@
+
+//feign.FeignException: [302] during [GET] to [http://email-notification-service/email/getAllEmail] [NotificationClient#getAllEmail()]: [[]]
+
 email notification service
 ahtu lfwe ogvo nfzo
 <dependencies>
