@@ -22,3 +22,64 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+
+ @Bean
+    public RouteLocator gatewayRouter(RouteLocatorBuilder builder)
+    {
+        return builder.routes()
+               /* .route(p->p.path("/get")
+                        .filters(f->f
+                                .addRequestHeader("MyHeader","MyURI")
+                                .addRequestParameter("Param","MyValue"))
+                        .uri("http://httpbin.org:80"))*/
+                .route(p->p.path("/email/**")   //controller prefix for notification
+                        .uri("lb://email-notification-service")) //service name registered with eureka
+                .route(p->p.path("/admin/**")
+                        .uri("lb://advisory-admin-service"))
+
+                .build();
+
+    }
+
+
+
+A retailer offers a rewards program to its customers, awarding points based on each recorded purchase.  
+
+  
+
+A customer receives 2 points for every dollar spent over $100 in each transaction, plus 1 point for every dollar spent between $50 and $100 in each transaction. 
+
+(e.g. a $120 purchase = 2x$20 + 1x$50 = 90 points). 
+
+  
+
+Given a record of every transaction during a three month period, calculate the reward points earned for each customer per month and total. 
+
+  
+
+·             Solve using Spring Boot 
+
+·             Create a RESTful endpoint 
+
+·             Make up a data set to best demonstrate your solution 
+
+·             Check solution into GitHub 
+
+Key points you need to take care before submitting:
+
+Do not hard code the months.
+Unit and integration tests present in code with more test data(for multiple customers with multiple transactions).
+Exception and negative test scenarios needs to be included.
+Add readme file explaining the project and it’s  structure and more details about the implementation.
+Do not check in target/bin folder.
+Do not upload the zip version.
+Add java docs at class and method levels that should explain the purpose.
+Format the code.
+Follow java coding standards(project structure, valid package names, also Class, method and variable names etc”;).
+
+
+    public WebClient.Builder loadBalancerWebClient()
+    {
+        return WebClient.builder();
+    }
