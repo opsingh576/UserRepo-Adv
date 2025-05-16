@@ -1,0 +1,296 @@
+// Reward Program Spring Boot Application
+
+// Main Application
+package com.example.rewards;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class RewardsProgramApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(RewardsProgramApplication.class, args);
+    }
+}
+
+// Model
+package com.example.rewards.model;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+
+@Entity
+public class Transaction {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private Long customerId;
+    private Double amount;
+    private LocalDate transactionDate;
+
+    public Transaction() {}
+
+    public Transaction(Long customerId, Double amount, LocalDate transactionDate) {
+        this.customerId = customerId;
+        this.amount = amount;
+        this.transactionDate = transactionDate;
+    }
+
+    // Getters and setters omitted for brevity
+}
+
+// DTO
+package com.example.rewards.dto;
+
+import java.util.Map;
+
+public class RewardSummary {
+    private Long customerId;
+    private Map<String, Integer> monthlyPoints;
+    private Integer totalPoints;
+
+    public RewardSummary(Long customerId, Map<String, Integer> monthlyPoints, Integer totalPoints) {
+        this.customerId = customerId;
+        this.monthlyPoints = monthlyPoints;
+        this.totalPoints = totalPoints;
+    }
+
+    // Getters and setters omitted for brevity
+}
+
+// Repository
+package com.example.rewards.repository;
+
+import com.example.rewards.model.Transaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+}
+
+// Service
+package com.example.rewards.service;
+
+import com.example.rewards.dto.RewardSummary;
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.YearMonth;
+import java.util.*;
+
+@Service
+public class RewardService {
+
+    @Autowired
+    private TransactionRepository repository;
+
+    public List<RewardSummary> calculateRewards() {
+        List<Transaction> transactions = repository.findAll();
+        Map<Long, Map<YearMonth, Integer>> customerMonthlyPoints = new HashMap<>();
+
+        for (Transaction tx : transactions) {
+            Long custId = tx.getCustomerId();
+            YearMonth month = YearMonth.from(tx.getTransactionDate());
+            int points = calculatePoints(tx.getAmount());
+
+            customerMonthlyPoints
+                .computeIfAbsent(custId, k -> new HashMap<>())
+                .merge(month, points, Integer::sum);
+        }
+
+        List<RewardSummary> summaries = new ArrayList<>();
+        for (var entry : customerMonthlyPoints.entrySet()) {
+            Long customerId = entry.getKey();
+            Map<String, Integer> monthlyPoints = new HashMap<>();
+            int total = 0;
+            for (var m : entry.getValue().entrySet()) {
+                monthlyPoints.put(m.getKey().toString(), m.getValue());
+                total += m.getValue();
+            }
+            summaries.add(new RewardSummary(customerId, monthlyPoints, total));
+        }
+
+        return summaries;
+    }
+
+    public int calculatePoints(double amount) {
+        int points = 0;
+        if (amount > 100) points += (amount - 100) * 2 + 50;
+        else if (amount > 50) points += (amount - 50);
+        return points;
+    }
+}
+
+// Controller
+package com.example.rewards.controller;
+
+import com.example.rewards.dto.RewardSummary;
+import com.example.rewards.service.RewardService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/rewards")
+public class RewardController {
+
+    @Autowired
+    private RewardService rewardService;
+
+    @GetMapping
+    public ResponseEntity<List<RewardSummary>> getRewards() {
+        return ResponseEntity.ok(rewardService.calculateRewards());
+    }
+}
+
+// Exception Handler
+package com.example.rewards.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public String handleIllegalArgumentException(IllegalArgumentException ex) {
+        return ex.getMessage();
+    }
+}
+
+// Sample Data Loader
+package com.example.rewards;
+
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.time.LocalDate;
+
+@Configuration
+public class DataLoader {
+
+    @Bean
+    public CommandLineRunner loadData(TransactionRepository repository) {
+        return args -> {
+            repository.save(new Transaction(1L, 120.0, LocalDate.of(2025, 1, 10)));
+            repository.save(new Transaction(1L, 75.0, LocalDate.of(2025, 2, 15)));
+            repository.save(new Transaction(1L, 200.0, LocalDate.of(2025, 3, 20)));
+
+            repository.save(new Transaction(2L, 50.0, LocalDate.of(2025, 1, 10)));
+            repository.save(new Transaction(2L, 110.0, LocalDate.of(2025, 2, 17)));
+            repository.save(new Transaction(2L, 130.0, LocalDate.of(2025, 3, 25)));
+        };
+    }
+}
+
+// Unit Test for RewardService
+package com.example.rewards.service;
+
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
+
+public class RewardServiceTest {
+
+    @Mock
+    private TransactionRepository repository;
+
+    @InjectMocks
+    private RewardService service;
+
+    public RewardServiceTest() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testCalculatePoints() {
+        assertEquals(90, service.calculatePoints(120));
+        assertEquals(50, service.calculatePoints(100));
+        assertEquals(0, service.calculatePoints(50));
+        assertEquals(40, service.calculatePoints(90));
+    }
+
+    @Test
+    public void testCalculateRewards() {
+        List<Transaction> transactions = List.of(
+            new Transaction(1L, 120.0, LocalDate.of(2025, 1, 10)),
+            new Transaction(1L, 75.0, LocalDate.of(2025, 2, 15))
+        );
+        when(repository.findAll()).thenReturn(transactions);
+
+        var results = service.calculateRewards();
+        assertEquals(1, results.size());
+        assertEquals(90 + 25, results.get(0).getTotalPoints());
+    }
+}
+
+// README.md
+/*
+# Reward Points Program
+
+## Description
+This Spring Boot application calculates reward points per customer per month and total, based on their purchase transactions.
+
+## Points Calculation Rules
+- 2 points per dollar spent over $100.
+- 1 point per dollar spent between $50-$100.
+- $120 purchase = (2 * 20) + (1 * 50) = 90 points
+
+## API Endpoint
+```
+GET /api/rewards
+```
+
+## Response Format
+```
+[
+  {
+    "customerId": 1,
+    "monthlyPoints": {
+      "2025-01": 90,
+      "2025-02": 25,
+      "2025-03": 250
+    },
+    "totalPoints": 365
+  },
+  ...
+]
+```
+
+## How to Run
+1. Clone repository
+2. Run `mvn clean install`
+3. Run `mvn spring-boot:run`
+
+## Tech Stack
+- Java 17
+- Spring Boot 3
+- H2 Database
+- JPA, REST
+- JUnit, Mockito
+
+## Tests
+- Unit and integration tests included
+
+## Notes
+- Target and bin directories excluded from Git
+*/
