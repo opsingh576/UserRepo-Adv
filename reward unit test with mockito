@@ -1,0 +1,96 @@
+package com.rewards.service;
+
+import com.rewards.exception.InvalidTransactionException;
+import com.rewards.model.Customer;
+import com.rewards.model.Transaction;
+import com.rewards.repository.CustomerRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.*;
+import java.time.LocalDate;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for RewardService using Mockito to mock dependencies.
+ */
+public class RewardServiceTest {
+
+    @Mock
+    private CustomerRepository customerRepository;
+
+    @InjectMocks
+    private RewardService rewardService;
+
+    @BeforeEach
+    void setup() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testCalculateRewards_singleCustomer_multipleTransactions() {
+        Customer customer = new Customer(1L, "John Doe", new ArrayList<>());
+        customer.getTransactions().add(new Transaction(120.0, LocalDate.of(2024, 3, 10), customer));
+        customer.getTransactions().add(new Transaction(75.0, LocalDate.of(2024, 4, 5), customer));
+
+        when(customerRepository.findAll()).thenReturn(Collections.singletonList(customer));
+
+        Map<String, Map<String, Integer>> rewards = rewardService.calculateRewards();
+
+        assertTrue(rewards.containsKey("1 - John Doe"));
+
+        Map<String, Integer> points = rewards.get("1 - John Doe");
+        assertEquals(90, points.get("March 2024"));   // 120 -> 90 points
+        assertEquals(25, points.get("April 2024"));   // 75 -> 25 points
+        assertEquals(115, points.get("Total"));
+    }
+
+    @Test
+    void testCalculateRewards_multipleCustomers() {
+        Customer customer1 = new Customer(1L, "John Doe", new ArrayList<>());
+        customer1.getTransactions().add(new Transaction(120.0, LocalDate.of(2024, 3, 10), customer1));
+
+        Customer customer2 = new Customer(2L, "Jane Doe", new ArrayList<>());
+        customer2.getTransactions().add(new Transaction(90.0, LocalDate.of(2024, 4, 15), customer2));
+
+        when(customerRepository.findAll()).thenReturn(Arrays.asList(customer1, customer2));
+
+        Map<String, Map<String, Integer>> rewards = rewardService.calculateRewards();
+
+        assertEquals(2, rewards.size());
+
+        Map<String, Integer> points1 = rewards.get("1 - John Doe");
+        assertEquals(90, points1.get("March 2024"));
+        assertEquals(90, rewards.get("2 - Jane Doe").get("April 2024"));
+    }
+
+    @Test
+    void testCalculateRewards_transactionWithZeroOrNegativeAmount_throwsException() {
+        Customer customer = new Customer(1L, "John Doe", new ArrayList<>());
+        customer.getTransactions().add(new Transaction(-10.0, LocalDate.now(), customer));
+
+        when(customerRepository.findAll()).thenReturn(Collections.singletonList(customer));
+
+        InvalidTransactionException exception = assertThrows(InvalidTransactionException.class,
+                () -> rewardService.calculateRewards());
+
+        assertEquals("Transaction amount must be greater than zero.", exception.getMessage());
+    }
+
+    @Test
+    void testCalculatePoints_correctCalculation() {
+        // Using reflection or changing access modifier if needed, but here test private method indirectly
+        Customer customer = new Customer(1L, "John Doe", new ArrayList<>());
+        customer.getTransactions().add(new Transaction(130.0, LocalDate.now(), customer));
+
+        when(customerRepository.findAll()).thenReturn(Collections.singletonList(customer));
+
+        Map<String, Map<String, Integer>> rewards = rewardService.calculateRewards();
+
+        Map<String, Integer> points = rewards.get("1 - John Doe");
+        // 2 points * (130-100) + 1 point * (100-50) = 2*30 + 50 = 110
+        assertEquals(110, points.getOrDefault("Total", 0));
+    }
+}
