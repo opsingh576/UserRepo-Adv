@@ -1,0 +1,308 @@
+/*
+ * RewardPointsApplication.java
+ * Entry point for the Spring Boot application that calculates reward points.
+ */
+package com.rewards;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * Main class to bootstrap the Spring Boot Reward Points Application.
+ */
+@SpringBootApplication
+public class RewardPointsApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(RewardPointsApplication.class, args);
+    }
+}
+
+/*
+ * Customer.java
+ * Entity class representing a customer.
+ */
+package com.rewards.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+import java.util.*;
+
+/**
+ * Entity representing a customer.
+ * A customer can have multiple transactions.
+ */
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class Customer {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Transaction> transactions = new ArrayList<>();
+
+    public Customer(String name) {
+        this.name = name;
+    }
+}
+
+/*
+ * Transaction.java
+ * Entity class representing a transaction.
+ */
+package com.rewards.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.LocalDate;
+
+/**
+ * Entity representing a transaction made by a customer.
+ */
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class Transaction {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Double amount;
+
+    private LocalDate date;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Customer customer;
+
+    public Transaction(Double amount, LocalDate date, Customer customer) {
+        this.amount = amount;
+        this.date = date;
+        this.customer = customer;
+    }
+}
+
+/*
+ * RewardService.java
+ * Service class to calculate reward points.
+ */
+package com.rewards.service;
+
+import com.rewards.exception.InvalidTransactionException;
+import com.rewards.model.*;
+import com.rewards.repository.CustomerRepository;
+import org.springframework.stereotype.Service;
+
+import java.time.format.TextStyle;
+import java.util.*;
+
+/**
+ * Service class responsible for calculating monthly and total reward points for customers.
+ */
+@Service
+public class RewardService {
+    private final CustomerRepository customerRepository;
+
+    public RewardService(CustomerRepository customerRepository) {
+        this.customerRepository = customerRepository;
+    }
+
+    /**
+     * Calculates monthly and total reward points per customer.
+     * Rewards: 2 points/dollar above $100, 1 point/dollar between $50-$100.
+     *
+     * @return Map with customer name as key and reward breakdown by month and total.
+     */
+    public Map<String, Map<String, Integer>> calculateRewards() {
+        List<Customer> customers = customerRepository.findAll();
+        Map<String, Map<String, Integer>> rewards = new HashMap<>();
+
+        for (Customer customer : customers) {
+            Map<String, Integer> monthlyPoints = new HashMap<>();
+            int totalPoints = 0;
+
+            for (Transaction transaction : customer.getTransactions()) {
+                if (transaction.getAmount() == null || transaction.getAmount() <= 0) {
+                    throw new InvalidTransactionException("Transaction amount must be greater than zero.");
+                }
+                int points = calculatePoints(transaction.getAmount());
+                String month = transaction.getDate().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+                        + " " + transaction.getDate().getYear();
+
+                monthlyPoints.put(month, monthlyPoints.getOrDefault(month, 0) + points);
+                totalPoints += points;
+            }
+
+            monthlyPoints.put("Total", totalPoints);
+            rewards.put(customer.getId() + " - " + customer.getName(), monthlyPoints);
+        }
+        return rewards;
+    }
+
+    /**
+     * Calculates reward points based on transaction amount.
+     * 
+     * @param amount the dollar amount of the transaction
+     * @return the calculated reward points
+     */
+    private int calculatePoints(double amount) {
+        int points = 0;
+        if (amount > 100) {
+            points += (int) (2 * (amount - 100));
+            amount = 100;
+        }
+        if (amount > 50) {
+            points += (int) (amount - 50);
+        }
+        return points;
+    }
+}
+
+/*
+ * RewardController.java
+ * REST controller to expose reward calculation endpoint.
+ */
+package com.rewards.controller;
+
+import com.rewards.exception.InvalidTransactionException;
+import com.rewards.service.RewardService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * Controller providing REST API endpoint for reward point calculations.
+ */
+@RestController
+@RequestMapping("/api/rewards")
+public class RewardController {
+
+    private final RewardService rewardService;
+
+    public RewardController(RewardService rewardService) {
+        this.rewardService = rewardService;
+    }
+
+    /**
+     * Endpoint to retrieve reward points per customer per month.
+     *
+     * @return Map containing reward breakdown by customer.
+     */
+    @GetMapping
+    public ResponseEntity<Map<String, Map<String, Integer>>> getCustomerRewards() {
+        return ResponseEntity.ok(rewardService.calculateRewards());
+    }
+
+    /**
+     * Exception handler for invalid transactions.
+     *
+     * @param ex Exception thrown during processing
+     * @return Error response message
+     */
+    @ExceptionHandler(InvalidTransactionException.class)
+    public ResponseEntity<String> handleInvalidTransaction(InvalidTransactionException ex) {
+        return ResponseEntity.badRequest().body(ex.getMessage());
+    }
+}
+
+/*
+ * InvalidTransactionException.java
+ * Custom exception for invalid transaction scenarios.
+ */
+package com.rewards.exception;
+
+/**
+ * Custom exception thrown when a transaction has invalid parameters.
+ */
+public class InvalidTransactionException extends RuntimeException {
+    public InvalidTransactionException(String message) {
+        super(message);
+    }
+}
+
+/*
+ * CustomerRepository.java
+ */
+package com.rewards.repository;
+
+import com.rewards.model.Customer;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+/**
+ * Repository interface for Customer entity.
+ */
+public interface CustomerRepository extends JpaRepository<Customer, Long> {}
+
+/*
+ * TransactionRepository.java
+ */
+package com.rewards.repository;
+
+import com.rewards.model.Transaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+/**
+ * Repository interface for Transaction entity.
+ */
+public interface TransactionRepository extends JpaRepository<Transaction, Long> {}
+
+/*
+ * RewardPointsApplicationTests.java
+ * Unit and integration tests.
+ */
+package com.rewards;
+
+import com.rewards.exception.InvalidTransactionException;
+import com.rewards.model.Customer;
+import com.rewards.model.Transaction;
+import com.rewards.repository.CustomerRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration and unit tests for Reward Points Application.
+ */
+@SpringBootTest
+public class RewardPointsApplicationTests {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    void testRewardCalculation() {
+        Customer customer = new Customer("John Doe");
+        Transaction t1 = new Transaction(120.0, LocalDate.now().minusMonths(1), customer);
+        Transaction t2 = new Transaction(75.0, LocalDate.now().minusMonths(2), customer);
+        customer.setTransactions(List.of(t1, t2));
+
+        customerRepository.save(customer);
+    }
+
+    @Test
+    void testInvalidTransactionAmount() {
+        Customer customer = new Customer("Jane Doe");
+        Transaction t1 = new Transaction(-50.0, LocalDate.now().minusMonths(1), customer);
+        customer.setTransactions(List.of(t1));
+
+        customerRepository.save(customer);
+
+        InvalidTransactionException exception = assertThrows(InvalidTransactionException.class, () -> {
+            new com.rewards.service.RewardService(customerRepository).calculateRewards();
+        });
+
+        assertEquals("Transaction amount must be greater than zero.", exception.getMessage());
+    }
+}
