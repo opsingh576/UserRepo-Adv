@@ -1,0 +1,82 @@
+package com.rewards.dto;
+
+import lombok.*;
+
+/**
+ * DTO to receive customer creation requests.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class CustomerRequest {
+    private String name;
+}
+
+
+
+
+
+
+import com.rewards.model.Customer;
+
+/**
+ * Adds a new customer to the system.
+ * 
+ * @param name customer name
+ * @return the saved Customer entity
+ */
+public Customer addCustomer(String name) {
+    if (name == null || name.isBlank()) {
+        throw new IllegalArgumentException("Customer name must not be empty");
+    }
+    Customer customer = new Customer();
+    customer.setName(name);
+    return customerRepository.save(customer);
+}
+
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+
+
+
+
+
+package com.rewards.controller;
+
+import com.rewards.dto.CustomerRequest;
+import com.rewards.model.Customer;
+import com.rewards.service.RewardService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+
+/**
+ * Controller exposing endpoints for retailer operations like adding customers.
+ */
+@RestController
+@RequestMapping("/api/retailer")
+public class RetailerController {
+
+    private final RewardService rewardService;
+
+    public RetailerController(RewardService rewardService) {
+        this.rewardService = rewardService;
+    }
+
+    /**
+     * Adds a new customer.
+     * 
+     * @param request contains the customer name
+     * @return ResponseEntity with saved customer info
+     */
+    @PostMapping("/customers")
+    public ResponseEntity<Customer> addCustomer(@Valid @RequestBody CustomerRequest request) {
+        Customer savedCustomer = rewardService.addCustomer(request.getName());
+        return ResponseEntity.ok(savedCustomer);
+    }
+}
