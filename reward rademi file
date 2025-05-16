@@ -1,0 +1,157 @@
+# Reward Points Service
+
+## Overview
+
+This is a Spring Boot application that calculates reward points for retail customers based on their transaction history. Customers earn:
+
+* **2 points** for every dollar spent over \$100
+* **1 point** for every dollar spent between \$50 and \$100
+
+For example:
+
+* A \$120 transaction earns **90 points**: (2 × \$20 over \$100) + (1 × \$50 between \$50 and \$100).
+
+The system calculates:
+
+* Monthly reward points per customer (month is dynamically derived from transaction date).
+* Total reward points across all months per customer.
+
+---
+
+## Features
+
+* Full Spring Boot application using REST architecture.
+* Custom exception handling for invalid transaction data.
+* JPA-based persistence layer for storing customer and transaction data.
+* Unit and integration tests using JUnit 5.
+* Uses **Lombok** for boilerplate code reduction.
+* Proper JavaDocs and clean code formatting following Java standards.
+
+---
+
+## Technologies Used
+
+* Java 17+
+* Spring Boot
+* Spring Data JPA
+* H2 Database (in-memory)
+* Lombok
+* JUnit 5
+
+---
+
+## Project Structure
+
+```
+src/main/java/com/rewards/
+│
+├── controller/                 # REST controller
+│   └── RewardController.java
+│
+├── service/                   # Business logic
+│   └── RewardService.java
+│
+├── model/                     # JPA entities
+│   ├── Customer.java
+│   └── Transaction.java
+│
+├── repository/                # Data access layer
+│   ├── CustomerRepository.java
+│   └── TransactionRepository.java
+│
+├── exception/                 # Custom exceptions
+│   └── InvalidTransactionException.java
+│
+└── RewardPointsApplication.java  # Main application
+```
+
+---
+
+## How to Run
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/yourusername/reward-points-service.git
+   cd reward-points-service
+   ```
+
+2. **Build the project**
+
+   ```bash
+   mvn clean install
+   ```
+
+3. **Run the application**
+
+   ```bash
+   mvn spring-boot:run
+   ```
+
+4. **Access the API**
+
+   ```
+   GET http://localhost:8080/api/rewards
+   ```
+
+---
+
+## Sample Output (JSON)
+
+```json
+{
+  "1 - John Doe": {
+    "March 2024": 90,
+    "April 2024": 25,
+    "Total": 115
+  },
+  "2 - Jane Doe": {
+    "April 2024": 90,
+    "Total": 90
+  }
+}
+```
+
+---
+
+## Testing
+
+Tests are located in:
+
+```
+src/test/java/com/rewards/RewardPointsApplicationTests.java
+```
+
+Test cases include:
+
+* **Reward calculation** for multiple transactions and customers.
+* **Invalid data** handling like negative transaction amount.
+
+Run tests:
+
+```bash
+mvn test
+```
+
+---
+
+## Notes
+
+* Months are **dynamically** derived from the transaction date (no hardcoded months).
+* Custom exception `InvalidTransactionException` is thrown for invalid inputs (e.g., negative amount).
+* The application uses **H2 in-memory database**, which resets on each restart.
+
+---
+
+## Future Enhancements
+
+* Add user authentication and roles.
+* Support pagination for large transaction sets.
+* Integrate Swagger/OpenAPI documentation.
+* Store transactions in a persistent database like PostgreSQL or MySQL.
+
+---
+
+## Author
+
+Developed for interview evaluation.
