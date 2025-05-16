@@ -1,0 +1,239 @@
+package com.retailer.reward;
+
+import com.retailer.reward.dto.RewardResponse;
+import com.retailer.reward.entity.CustomerTransaction;
+import com.retailer.reward.repository.CustomerTransactionRepository;
+import com.retailer.reward.service.RewardService;
+import com.retailer.reward.service.impl.RewardServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.data.jpa.repository.JpaRepository;
+import lombok.*;
+
+import javax.persistence.*;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@SpringBootApplication
+public class RewardPointsCalculatorApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(RewardPointsCalculatorApplication.class, args);
+    }
+
+    @Bean
+    public RewardService rewardService(CustomerTransactionRepository repository) {
+        return new RewardServiceImpl(repository);
+    }
+}
+
+// DTO
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+class RewardResponse {
+    private String customerId;
+    private Map<String, Integer> monthlyRewards;
+    private int totalRewards;
+}
+
+// Entity
+@Entity
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+class CustomerTransaction {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String customerId;
+    private Double amount;
+    private LocalDate transactionDate;
+}
+
+// Repository
+interface CustomerTransactionRepository extends JpaRepository<CustomerTransaction, Long> {
+    List<CustomerTransaction> findByCustomerId(String customerId);
+}
+
+// Service Interface
+interface RewardService {
+    RewardResponse calculateRewards(String customerId);
+    List<RewardResponse> calculateAllCustomerRewards();
+}
+
+// Service Implementation
+@Slf4j
+class RewardServiceImpl implements RewardService {
+
+    private final CustomerTransactionRepository transactionRepository;
+
+    public RewardServiceImpl(CustomerTransactionRepository transactionRepository) {
+        this.transactionRepository = transactionRepository;
+    }
+
+    @Override
+    public RewardResponse calculateRewards(String customerId) {
+        List<CustomerTransaction> transactions = transactionRepository.findByCustomerId(customerId);
+        if (transactions.isEmpty()) {
+            throw new IllegalArgumentException("No transactions found for customer ID: " + customerId);
+        }
+        return calculateRewardFromTransactions(customerId, transactions);
+    }
+
+    @Override
+    public List<RewardResponse> calculateAllCustomerRewards() {
+        List<CustomerTransaction> allTransactions = transactionRepository.findAll();
+        Map<String, List<CustomerTransaction>> groupedByCustomer = allTransactions.stream()
+                .collect(Collectors.groupingBy(CustomerTransaction::getCustomerId));
+
+        return groupedByCustomer.entrySet().stream()
+                .map(entry -> calculateRewardFromTransactions(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    private RewardResponse calculateRewardFromTransactions(String customerId, List<CustomerTransaction> transactions) {
+        Map<String, Integer> monthlyRewards = new HashMap<>();
+        int total = 0;
+
+        for (CustomerTransaction tx : transactions) {
+            int points = calculatePoints(tx.getAmount());
+            String month = tx.getTransactionDate().getMonth().name();
+            monthlyRewards.put(month, monthlyRewards.getOrDefault(month, 0) + points);
+            total += points;
+            log.info("Transaction: {} - Points: {}", tx, points);
+        }
+
+        return RewardResponse.builder()
+                .customerId(customerId)
+                .monthlyRewards(monthlyRewards)
+                .totalRewards(total)
+                .build();
+    }
+
+    private int calculatePoints(Double amount) {
+        int points = 0;
+        if (amount > 100) {
+            points += (amount.intValue() - 100) * 2 + 50;
+        } else if (amount > 50) {
+            points += (amount.intValue() - 50);
+        }
+        return points;
+    }
+}
+
+// Controller
+@RestController
+@RequestMapping("/api/rewards")
+class RewardController {
+
+    private final RewardService rewardService;
+
+    public RewardController(RewardService rewardService) {
+        this.rewardService = rewardService;
+    }
+
+    /**
+     * GET endpoint to retrieve all rewards for all customers.
+     */
+    @GetMapping("/all")
+    public List<RewardResponse> getAllRewards() {
+        return rewardService.calculateAllCustomerRewards();
+    }
+
+    /**
+     * GET endpoint to retrieve rewards for a single customer.
+     */
+    @GetMapping("/{customerId}")
+    public RewardResponse getRewardByCustomer(@PathVariable String customerId) {
+        return rewardService.calculateRewards(customerId);
+    }
+
+    /**
+     * POST endpoint to get rewards for a given customer ID.
+     *
+     * @param customerId Customer ID
+     * @return RewardResponse containing total and monthly rewards
+     */
+    @PostMapping("/calculate")
+    public RewardResponse calculateRewardForCustomer(@RequestParam String customerId) {
+        return rewardService.calculateRewards(customerId);
+    }
+}
+
+// Unit Tests
+class RewardServiceImplTest {
+
+    @Mock
+    private CustomerTransactionRepository transactionRepository;
+
+    @InjectMocks
+    private RewardServiceImpl rewardService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testCalculateRewards_WithValidTransactions() {
+        String customerId = "CUST001";
+        List<CustomerTransaction> transactions = Arrays.asList(
+                new CustomerTransaction(1L, customerId, 120.0, LocalDate.of(2024, 3, 15)),
+                new CustomerTransaction(2L, customerId, 75.0, LocalDate.of(2024, 3, 20)),
+                new CustomerTransaction(3L, customerId, 200.0, LocalDate.of(2024, 4, 10))
+        );
+
+        when(transactionRepository.findByCustomerId(customerId)).thenReturn(transactions);
+
+        RewardResponse response = rewardService.calculateRewards(customerId);
+
+        assertNotNull(response);
+        assertEquals(customerId, response.getCustomerId());
+        assertEquals(2, response.getMonthlyRewards().size());
+        assertTrue(response.getTotalRewards() > 0);
+    }
+
+    @Test
+    void testCalculateRewards_NoTransactions() {
+        String customerId = "CUST002";
+        when(transactionRepository.findByCustomerId(customerId)).thenReturn(Collections.emptyList());
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                rewardService.calculateRewards(customerId));
+
+        assertEquals("No transactions found for customer ID: " + customerId, exception.getMessage());
+    }
+
+    @Test
+    void testCalculateAllCustomerRewards() {
+        List<CustomerTransaction> transactions = Arrays.asList(
+                new CustomerTransaction(1L, "CUST001", 120.0, LocalDate.of(2024, 3, 15)),
+                new CustomerTransaction(2L, "CUST002", 90.0, LocalDate.of(2024, 3, 10)),
+                new CustomerTransaction(3L, "CUST001", 60.0, LocalDate.of(2024, 4, 5))
+        );
+
+        when(transactionRepository.findAll()).thenReturn(transactions);
+
+        List<RewardResponse> responses = rewardService.calculateAllCustomerRewards();
+
+        assertNotNull(responses);
+        assertEquals(2, responses.size());
+        assertTrue(responses.stream().anyMatch(r -> r.getCustomerId().equals("CUST001")));
+        assertTrue(responses.stream().anyMatch(r -> r.getCustomerId().equals("CUST002")));
+    }
+}
